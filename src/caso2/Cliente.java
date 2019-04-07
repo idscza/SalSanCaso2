@@ -36,6 +36,7 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
 public class Cliente {
 	
+	//Strings de los diferentes algoritmos
 	public static final String AES = "AES";
 	public static final String BLOWFISH = "Blowfish";
 	public static final String RSA = "RSA";
@@ -45,6 +46,7 @@ public class Cliente {
 	public static final String HMACSHA512 = "HMACSHA512";
 	public static final String SEP = ":";
 	
+	//Variables usadas en todo el cliente
 	BufferedReader in, consola;
 	
 	PrintWriter out;
@@ -84,16 +86,19 @@ public class Cliente {
 		}
 	}
 	
+	//Método que lee el mensaje del servidor, lo imprime en consola y lo retorna como String
 	String recibirservidor() throws IOException{
 		String rta = in.readLine();
 		System.out.println("SERVIDOR: " + rta);
 		return rta;
 	}
 
+	//Menú para la selección de los algorimos Simétricos y de HMAC que se van a usar en la sesión
 	private String configurarAlgoritmos() {
 		
 		String mensaje = "ALGORITMOS";
 		boolean selected = false;
+		//Seleccionador de algoritmo Simétrico
 		while(!selected) {
 			System.out.println("Seleccionar Algoritmo Simétrico");
 			System.out.println("1: AES");
@@ -119,9 +124,11 @@ public class Cliente {
 			}
 		}
 		
+		//Para todo caso el asimétrico es RSA
 		mensaje=mensaje+SEP+RSA;
 		
 		selected = false;
+		//Seleciconador de Algoritmo de HMAC
 		while(!selected) {
 			System.out.println("Seleccionar Algoritmo Simétrico");
 			System.out.println("1: SHA1");
@@ -161,6 +168,7 @@ public class Cliente {
 		return mensaje;
 	}
 	
+	//Cifrador Asimétrico
 	public byte[] cifrarAsimetrico(Key llave, byte[] texto) {
 		byte[] textoCifrado;
 		
@@ -175,6 +183,7 @@ public class Cliente {
 		}
 	}
 	
+	//Descifrador Asimétrico
 	public byte[] descifrarAsimetrico(Key llave, byte[] texto) {
 		byte[] textoClaro;
 		
@@ -190,6 +199,7 @@ public class Cliente {
 		}
 	}
 	
+	//Cifrador Simétrico
 	public byte[] cifrarSimetrico(SecretKey llave, String texto) {
 		byte[] textoCifrado;
 		
@@ -207,7 +217,7 @@ public class Cliente {
 		}
 	}
 	
-	
+	//Productor de HMAC cifrado
 	public byte[] obtenerhash(SecretKey llave, String texto) {
 	try {
 			byte[] cifrado = texto.getBytes();
@@ -224,6 +234,7 @@ public class Cliente {
 		}
 	}
 	
+	//Generador de Certificado en x509 v3
 	public Certificate generarcertificado() throws OperatorCreationException, CertificateException {
         
         long ahora = System.currentTimeMillis();
@@ -242,13 +253,12 @@ public class Cliente {
         X509v3CertificateBuilder cb = new X509v3CertificateBuilder(firmante,serial,desde,hasta,firmante,subjectPublicKeyInfo);
         X509CertificateHolder certificateHolder = cb.build(contentSigner);
 
-        Certificate selfSignedCert = new JcaX509CertificateConverter()
-        		.getCertificate(certificateHolder);
+        Certificate selfSignedCert = new JcaX509CertificateConverter().getCertificate(certificateHolder);
 
         return selfSignedCert;
 	}
 	
-	
+	//Enviador de certificado al servidor
 	public void enviarcertificado() throws OperatorCreationException, CertificateException {
 
 		Certificate certificado = generarcertificado();
@@ -258,12 +268,13 @@ public class Cliente {
 		out.println(certificadoEnString);
 	}
 	
+	//decodificador de certificado recibido
 	private Certificate recibircertificado(String rtaserver) throws CertificateException, IOException {   
         byte[] c= DatatypeConverter.parseHexBinary(rtaserver);
         return new JcaX509CertificateConverter().getCertificate(new X509CertificateHolder(c));
 	}
 
-	
+	//Encripta asimétricamente y envía la llave a utilizar
 	public void enviarllave() {
 		KeyGenerator keygen;
 		try {
@@ -280,7 +291,8 @@ public class Cliente {
 		}
 	}
 	
-
+	//Verifica que la llave simétrica recibida sea la misma enviada 
+	//Permite seguir la conexión si lo son, de lo contrario detiene el proceso
 	private void verificarllaves(String llave) {
 		byte[] llavebytes= DatatypeConverter.parseHexBinary(llave);
 		llavebytes = descifrarAsimetrico(keys.getPrivate(),llavebytes);
@@ -295,6 +307,8 @@ public class Cliente {
 		
 	}
 	
+	//Compara que dos arreglos de bytes sean iguales
+	//Se usa en la comparacion de llaves y de Hmac
 	public boolean compararbytes(byte[] llave1, byte[] llave2) {
 		boolean iguales = true;
 		
@@ -309,6 +323,7 @@ public class Cliente {
 		return iguales;
 	}
 
+	//Envía los datos de la localización, cifrados simétricamente
 	private void enviardatos(String rtacliente) {
 		
 		byte[] rtacifrada = cifrarSimetrico(secretKey, rtacliente);
@@ -317,6 +332,7 @@ public class Cliente {
 		System.out.println("CLIENTE: "+rtaenviada);
 	}
 	
+	//Envía el HMac de los datos de la localización, cifrados simétricamente
 	private void enviarhmac(String rtacliente) {
 		byte[] mac = obtenerhash(secretKey,rtacliente);
 		String macstring = DatatypeConverter.printHexBinary(mac);
@@ -325,13 +341,15 @@ public class Cliente {
 		System.out.println("CLIENTE: "+macstring);
 		
 	}
-
+	
+	//Verifica que el HMac recibido sea el mismo que el enviado
 	private boolean verificarhmac(String rtaserver) {
 		byte[] rtaenbytes= DatatypeConverter.parseHexBinary(rtaserver);
 		rtaenbytes = descifrarAsimetrico(publicserverkey,rtaenbytes);
 		return compararbytes(hmacgenerado,rtaenbytes);
 	}
 	
+	//PROTOCOLO
 	public void ejecutar() throws ProtocoloException{
 		String rtaserver = "";
 		String rtacliente = "";
@@ -340,39 +358,49 @@ public class Cliente {
 		System.out.println("CLIENTE: HOLA");
 		out.println("HOLA");
 		try {
+			
+			//Primer Saludo
 			rtaserver = recibirservidor();
 			if(!rtaserver.equals("OK")) throw new ProtocoloException("Conexión Rechazada");
 			
+			//Permite configurar los algoritmos a usar en esta sesión
 			rtacliente = configurarAlgoritmos();
 			out.println(rtacliente);
 			System.out.println("CLIENTE: " +rtacliente);
 			rtaserver = recibirservidor();
 			if(!rtaserver.equals("OK")) throw new ProtocoloException("Algoritmos Rechazados");
 			
+			//Genera, envía, recibe y procesa los certificados
 			System.out.println("CLIENTE: Enviando Certificado");
 			enviarcertificado();
 			rtaserver = recibirservidor();
 			certirecibido = recibircertificado(rtaserver);
 			publicserverkey = certirecibido.getPublicKey();
 			
+			//Envía y genera la llave simétrica
 			System.out.println("Enviando llaves");
 			enviarllave();
 			rtaserver = recibirservidor();
 			verificarllaves(rtaserver);
 
+			//Permite que el usuario ingrese los datos por consola
 			System.out.println("Envíe los Datos: Ej: 15;41 24.2028,2 10.4418 ");
 			rtacliente = consola.readLine();
 			
+			//Envía los datos y el Hash
 			enviardatos(rtacliente);
 			enviarhmac(rtacliente);
 			
+			//confirma que se haya enviado adecuadamente
 			rtaserver= recibirservidor();
 			if(rtaserver.equals("ERROR")) throw new ProtocoloException("Mensaje Rechazado");
 			
+			//Verifica el mac recibido por el servidor
 			if(verificarhmac(rtaserver)) {
 			System.out.println("Mensaje correctamente recibido");
 			}else System.out.println("El mensaje no se recibió correctamente");
 			
+			//Cierra todo y le gasta polas a los monitores
 			consola.close();
 			socket.close();
 			out.close();
@@ -388,9 +416,12 @@ public class Cliente {
 		}
 	}
 
+	//El maaaaain xd
 	public static void main(String[] args) {
 
+		//Cambiar Puerto Aquí
 		Cliente client = new Cliente("localhost", 6969);
+		//Sí se está usando BouncyCastle
 		Security.addProvider(new BouncyCastleProvider());
 		
 		try {
